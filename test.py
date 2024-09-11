@@ -1,7 +1,7 @@
-from sklearn.metrics import precision_score, recall_score, accuracy_score
+from sklearn.metrics import precision_score, recall_score, accuracy_score,f1_score
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-from architecture import unet_model
+from architecture import unet_model_with_classification
 import numpy as np
 import matplotlib.pyplot as plt
 from dataloader import SegmentationDataGenerator
@@ -12,9 +12,9 @@ test_generator = SegmentationDataGenerator(test_dir, batch_size=1, target_size=t
 
 
 
-model_file = 'unet_best_weights'
+model_file = 'unet_classifier_best_weights'
 inputs = tf.keras.layers.Input((256, 256, 1))
-Unet = unet_model(inputs, droupouts= 0.07)
+Unet = unet_model_with_classification(inputs, dropouts= 0.07)
 Unet.load_weights(model_file)
 
 
@@ -48,6 +48,24 @@ def calculate_precision_recall_accuracy(y_true, y_pred):
     
     return precision, recall, accuracy
 
+# Function to calculate Precision, Recall, Accuracy, and F1-score for classification
+def calculate_classification_metrics(y_true, y_pred):
+    precision = precision_score([y_true], [y_pred], average='weighted', zero_division=1)
+    recall = recall_score([y_true], [y_pred], average='weighted', zero_division=1)
+    accuracy = accuracy_score([y_true], [y_pred])
+    f1 = f1_score([y_true], [y_pred], average='weighted', zero_division=1)
+    
+    return precision, recall, accuracy, f1
+
+
+def get_class_name(class_idx):
+    if class_idx == 0:
+        class_name = "Benign"
+    elif class_idx == 1:
+        class_name = "Malignant"
+    else:
+        class_name = "Normal"
+    return class_name
 
 def compute_performance_metrics(data_generator):
     # Variables to accumulate metrics
@@ -56,63 +74,99 @@ def compute_performance_metrics(data_generator):
     total_precision = 0
     total_recall = 0
     total_accuracy = 0
+    total_f1 = 0  # For classification F1-score
     num_samples = 0
+
+    total_classification_precision = 0
+    total_classification_recall = 0
+    total_classification_accuracy = 0
+    total_classification_f1 = 0
 
     # Loop through the test dataset
     for n, batch in enumerate(data_generator):
         X = batch[0]
-        Y = batch[1]  # Ground truth mask
+        Y = batch[1]  # Ground truth for both segmentation and classification
+        segmentation_ground_truth = Y['segmentation_output'][0]
+        classification_ground_truth = np.argmax(Y['classification_output'][0])
 
-        prediction=Unet(X)
-        prediction = np.array(prediction)
+        prediction = Unet(X)
+        segmentation_prediction = np.array(prediction[0])
+        classification_prediction = np.array(prediction[1])
 
         # Apply threshold to convert predictions to binary masks (0 or 1)
-        prediction = (prediction > 0.1).astype(np.float32)
+        segmentation_prediction = (segmentation_prediction > 0.2).astype(np.float32)
 
-        if(n%10==0):
-            plt.figure(figsize = (10, 7))
+        # Argmax to get the class with the highest probability for classification
+        classification_prediction = np.argmax(classification_prediction)
 
-            plt.subplot(1,3,1)
-            plt.imshow(X[0],cmap='gray')
-            plt.title('Ultra Sound Image')
+        # Visualization every 10th image
+        if (n % 10 == 0):
+            classification_prediction_name=get_class_name(classification_prediction)
+            classification_ground_truth_name=get_class_name(classification_ground_truth)
 
-            plt.subplot(1,3,2)
-            plt.imshow(Y[0])
-            plt.title('Ground Truth Mask for Tumour')
+            plt.figure(figsize=(10, 7))
+            plt.subplot(1, 3, 1)
+            plt.imshow(X[0], cmap='gray')
+            plt.title(f'Ultra Sound Image\n Ground Truth Class: {classification_ground_truth_name}')
 
-            plt.subplot(1,3,3)
-            plt.imshow(prediction[0])
-            plt.title('Segmentation for Tumour')
+            plt.subplot(1, 3, 2)
+            plt.imshow(segmentation_ground_truth)
+            plt.title(f'Ground Truth Mask for Tumour\n Ground Truth Class: {classification_ground_truth_name}')
+
+            plt.subplot(1, 3, 3)
+            plt.imshow(segmentation_prediction[0])
+            plt.title(f'Segmentation for Tumour\n Predicted Class: {classification_prediction_name}')
             plt.show()
 
+        # Calculate metrics for segmentation
+        iou = iou_metric(segmentation_ground_truth, segmentation_prediction[0])
+        dice = dice_coefficient(segmentation_ground_truth, segmentation_prediction[0])
+        precision, recall, accuracy = calculate_precision_recall_accuracy(segmentation_ground_truth, segmentation_prediction[0])
 
-        
-        # Calculate metrics for the current image
-        iou = iou_metric(Y[0], prediction[0])
-        dice = dice_coefficient(Y[0], prediction[0])
-        precision, recall, accuracy = calculate_precision_recall_accuracy(Y[0], prediction[0])
+        # Calculate metrics for classification
+        classification_precision, classification_recall, classification_accuracy, classification_f1 = calculate_classification_metrics(
+            classification_ground_truth, classification_prediction)
 
-        # Accumulate the metrics
+        # Accumulate the segmentation metrics
         total_iou += iou
         total_dice += dice
         total_precision += precision
         total_recall += recall
         total_accuracy += accuracy
+
+        # Accumulate the classification metrics
+        total_classification_precision += classification_precision
+        total_classification_recall += classification_recall
+        total_classification_accuracy += classification_accuracy
+        total_classification_f1 += classification_f1
+
         num_samples += 1
 
-    # Calculate the average metrics
+    # Calculate the average segmentation metrics
     avg_iou = total_iou / num_samples
     avg_dice = total_dice / num_samples
     avg_precision = total_precision / num_samples
     avg_recall = total_recall / num_samples
     avg_accuracy = total_accuracy / num_samples
 
-    # Print the average performance metrics
+    # Calculate the average classification metrics
+    avg_classification_precision = total_classification_precision / num_samples
+    avg_classification_recall = total_classification_recall / num_samples
+    avg_classification_accuracy = total_classification_accuracy / num_samples
+    avg_classification_f1 = total_classification_f1 / num_samples
+
+    # Print the average segmentation performance metrics
     print(f"Average IoU (Jaccard Index): {avg_iou:.4f}")
     print(f"Average Dice Coefficient: {avg_dice:.4f}")
-    print(f"Average Precision: {avg_precision:.4f}")
-    print(f"Average Recall: {avg_recall:.4f}")
-    print(f"Average Accuracy: {avg_accuracy:.4f}")
+    print(f"Average Precision (Segmentation): {avg_precision:.4f}")
+    print(f"Average Recall (Segmentation): {avg_recall:.4f}")
+    print(f"Average Accuracy (Segmentation): {avg_accuracy:.4f}")
+
+    # Print the average classification performance metrics
+    print(f"Average Precision (Classification): {avg_classification_precision:.4f}")
+    print(f"Average Recall (Classification): {avg_classification_recall:.4f}")
+    print(f"Average Accuracy (Classification): {avg_classification_accuracy:.4f}")
+    print(f"Average F1-Score (Classification): {avg_classification_f1:.4f}")
 
 
 compute_performance_metrics(test_generator)

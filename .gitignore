@@ -2,3 +2,4 @@
 *.index
 checkpoint
 unet_best_weights.*
+unet_classifier_best_weights.*

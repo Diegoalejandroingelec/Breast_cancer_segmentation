@@ -16,15 +16,23 @@ class SegmentationDataGenerator(tf.keras.utils.Sequence):
 
     def __getitem__(self, index):
         batch_image_paths = self.image_paths[index * self.batch_size:(index + 1) * self.batch_size]
-        images, masks = [], []
+        images, masks, classes = [], [], []
 
         for image_path in batch_image_paths:
             mask_path = image_path.replace('.png', '_mask.png')  # Get corresponding mask path
             image, mask = self.load_image_mask(image_path, mask_path, self.target_size)
             images.append(image)
             masks.append(mask)
+            if "Benign" in image_path:
+                classes.append([1,0,0])
+            elif "Malignant" in image_path:
+                classes.append([0,1,0])
+            else:
+                classes.append([0,0,1])
 
-        return np.array(images), np.array(masks)
+
+        # Return a dictionary of outputs for segmentation and classification
+        return np.array(images), {"segmentation_output": np.array(masks), "classification_output": np.array(classes)}
 
     def on_epoch_end(self):
         if self.shuffle:

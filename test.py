@@ -1,10 +1,12 @@
-from sklearn.metrics import precision_score, recall_score, accuracy_score,f1_score
+from sklearn.metrics import precision_score, recall_score, accuracy_score,f1_score, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 from architecture import unet_model_with_classification
 import numpy as np
 import matplotlib.pyplot as plt
 from dataloader import SegmentationDataGenerator
+
+
 
 test_dir =  'test'
 target_size = (256,256)
@@ -82,6 +84,10 @@ def compute_performance_metrics(data_generator):
     total_classification_accuracy = 0
     total_classification_f1 = 0
 
+    # Lists to store ground truth and predictions for classification
+    all_classification_ground_truths = []
+    all_classification_predictions = []
+
     # Loop through the test dataset
     for n, batch in enumerate(data_generator):
         X = batch[0]
@@ -99,10 +105,14 @@ def compute_performance_metrics(data_generator):
         # Argmax to get the class with the highest probability for classification
         classification_prediction = np.argmax(classification_prediction)
 
+        # Append to classification lists
+        all_classification_ground_truths.append(classification_ground_truth)
+        all_classification_predictions.append(classification_prediction)
+
         # Visualization every 10th image
         if (n % 10 == 0):
-            classification_prediction_name=get_class_name(classification_prediction)
-            classification_ground_truth_name=get_class_name(classification_ground_truth)
+            classification_prediction_name = get_class_name(classification_prediction)
+            classification_ground_truth_name = get_class_name(classification_ground_truth)
 
             plt.figure(figsize=(10, 7))
             plt.subplot(1, 3, 1)
@@ -167,6 +177,18 @@ def compute_performance_metrics(data_generator):
     print(f"Average Recall (Classification): {avg_classification_recall:.4f}")
     print(f"Average Accuracy (Classification): {avg_classification_accuracy:.4f}")
     print(f"Average F1-Score (Classification): {avg_classification_f1:.4f}")
+
+    # Compute the confusion matrix
+    cm = confusion_matrix(all_classification_ground_truths, all_classification_predictions)
+
+    # Define the class labels
+    class_labels = ['Benign', 'Malignant', 'Normal']
+
+    # Display the confusion matrix using a heatmap with class names
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_labels)
+    disp.plot(cmap=plt.cm.Blues)
+    plt.title('Confusion Matrix for Classification')
+    plt.show()
 
 
 compute_performance_metrics(test_generator)

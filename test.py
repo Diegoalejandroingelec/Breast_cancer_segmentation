@@ -1,4 +1,4 @@
-from sklearn.metrics import precision_score, recall_score, accuracy_score,f1_score, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import precision_score, recall_score, accuracy_score, f1_score, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 from architecture import unet_model_with_classification
@@ -6,21 +6,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dataloader import SegmentationDataGenerator
 
+# Define the directory for the test dataset and target size for images
+test_dir = 'test'
+target_size = (256, 256)
 
-
-test_dir =  'test'
-target_size = (256,256)
+# Create a data generator for the test set
 test_generator = SegmentationDataGenerator(test_dir, batch_size=1, target_size=target_size)
 
-
-
+# Load the pre-trained model weights
 model_file = 'unet_classifier_best_weights'
 inputs = tf.keras.layers.Input((256, 256, 1))
-Unet = unet_model_with_classification(inputs, dropouts= 0.07)
+Unet = unet_model_with_classification(inputs, dropouts=0.07)
 Unet.load_weights(model_file)
 
-
-# Function to calculate IoU
+# Function to calculate Intersection over Union (IoU) metric
 def iou_metric(y_true, y_pred, smooth=1e-6):
     y_true_f = y_true.flatten()
     y_pred_f = y_pred.flatten()
@@ -39,7 +38,7 @@ def dice_coefficient(y_true, y_pred, smooth=1e-6):
     dice = (2. * intersection + smooth) / (np.sum(y_true_f) + np.sum(y_pred_f) + smooth)
     return dice
 
-# Function to calculate Precision, Recall, and Accuracy
+# Function to calculate Precision, Recall, and Accuracy for segmentation
 def calculate_precision_recall_accuracy(y_true, y_pred):
     y_true_f = y_true.flatten().astype(np.uint8)
     y_pred_f = y_pred.flatten().astype(np.uint8)
@@ -59,7 +58,7 @@ def calculate_classification_metrics(y_true, y_pred):
     
     return precision, recall, accuracy, f1
 
-
+# Function to get the class name from the class index
 def get_class_name(class_idx):
     if class_idx == 0:
         class_name = "Benign"
@@ -69,6 +68,7 @@ def get_class_name(class_idx):
         class_name = "Normal"
     return class_name
 
+# Function to compute and display performance metrics
 def compute_performance_metrics(data_generator):
     # Variables to accumulate metrics
     total_iou = 0
@@ -90,11 +90,12 @@ def compute_performance_metrics(data_generator):
 
     # Loop through the test dataset
     for n, batch in enumerate(data_generator):
-        X = batch[0]
+        X = batch[0]  # Input image
         Y = batch[1]  # Ground truth for both segmentation and classification
         segmentation_ground_truth = Y['segmentation_output'][0]
         classification_ground_truth = np.argmax(Y['classification_output'][0])
 
+        # Get model predictions for segmentation and classification
         prediction = Unet(X)
         segmentation_prediction = np.array(prediction[0])
         classification_prediction = np.array(prediction[1])
@@ -105,7 +106,7 @@ def compute_performance_metrics(data_generator):
         # Argmax to get the class with the highest probability for classification
         classification_prediction = np.argmax(classification_prediction)
 
-        # Append to classification lists
+        # Append ground truth and prediction to classification lists
         all_classification_ground_truths.append(classification_ground_truth)
         all_classification_predictions.append(classification_prediction)
 
@@ -178,7 +179,7 @@ def compute_performance_metrics(data_generator):
     print(f"Average Accuracy (Classification): {avg_classification_accuracy:.4f}")
     print(f"Average F1-Score (Classification): {avg_classification_f1:.4f}")
 
-    # Compute the confusion matrix
+    # Compute the confusion matrix for classification predictions
     cm = confusion_matrix(all_classification_ground_truths, all_classification_predictions)
 
     # Define the class labels
@@ -190,5 +191,5 @@ def compute_performance_metrics(data_generator):
     plt.title('Confusion Matrix for Classification')
     plt.show()
 
-
+# Compute performance metrics for the test dataset
 compute_performance_metrics(test_generator)

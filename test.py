@@ -14,7 +14,7 @@ target_size = (256, 256)
 test_generator = SegmentationDataGenerator(test_dir, batch_size=1, target_size=target_size)
 
 # Load the pre-trained model weights
-model_file = 'unet_classifier_best_weights'
+model_file = 'unet_weights_converted.h5'
 inputs = tf.keras.layers.Input((256, 256, 1))
 Unet = unet_model_with_classification(inputs, dropouts=0.07)
 Unet.load_weights(model_file)
@@ -51,10 +51,10 @@ def calculate_precision_recall_accuracy(y_true, y_pred):
 
 # Function to calculate Precision, Recall, Accuracy, and F1-score for classification
 def calculate_classification_metrics(y_true, y_pred):
-    precision = precision_score([y_true], [y_pred], average='weighted', zero_division=1)
-    recall = recall_score([y_true], [y_pred], average='weighted', zero_division=1)
-    accuracy = accuracy_score([y_true], [y_pred])
-    f1 = f1_score([y_true], [y_pred], average='weighted', zero_division=1)
+    precision = precision_score(y_true, y_pred, average='weighted', zero_division=1)
+    recall = recall_score(y_true, y_pred, average='weighted', zero_division=1)
+    accuracy = accuracy_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred, average='weighted', zero_division=1)
     
     return precision, recall, accuracy, f1
 
@@ -79,10 +79,7 @@ def compute_performance_metrics(data_generator):
     total_f1 = 0  # For classification F1-score
     num_samples = 0
 
-    total_classification_precision = 0
-    total_classification_recall = 0
-    total_classification_accuracy = 0
-    total_classification_f1 = 0
+
 
     # Lists to store ground truth and predictions for classification
     all_classification_ground_truths = []
@@ -134,9 +131,7 @@ def compute_performance_metrics(data_generator):
         dice = dice_coefficient(segmentation_ground_truth, segmentation_prediction[0])
         precision, recall, accuracy = calculate_precision_recall_accuracy(segmentation_ground_truth, segmentation_prediction[0])
 
-        # Calculate metrics for classification
-        classification_precision, classification_recall, classification_accuracy, classification_f1 = calculate_classification_metrics(
-            classification_ground_truth, classification_prediction)
+
 
         # Accumulate the segmentation metrics
         total_iou += iou
@@ -145,14 +140,14 @@ def compute_performance_metrics(data_generator):
         total_recall += recall
         total_accuracy += accuracy
 
-        # Accumulate the classification metrics
-        total_classification_precision += classification_precision
-        total_classification_recall += classification_recall
-        total_classification_accuracy += classification_accuracy
-        total_classification_f1 += classification_f1
-
         num_samples += 1
 
+
+        # Calculate metrics for classification
+    classification_precision, classification_recall, classification_accuracy, classification_f1 = calculate_classification_metrics(
+        all_classification_ground_truths, all_classification_predictions)
+    
+    
     # Calculate the average segmentation metrics
     avg_iou = total_iou / num_samples
     avg_dice = total_dice / num_samples
@@ -160,11 +155,6 @@ def compute_performance_metrics(data_generator):
     avg_recall = total_recall / num_samples
     avg_accuracy = total_accuracy / num_samples
 
-    # Calculate the average classification metrics
-    avg_classification_precision = total_classification_precision / num_samples
-    avg_classification_recall = total_classification_recall / num_samples
-    avg_classification_accuracy = total_classification_accuracy / num_samples
-    avg_classification_f1 = total_classification_f1 / num_samples
 
     # Print the average segmentation performance metrics
     print(f"Average IoU (Jaccard Index): {avg_iou:.4f}")
@@ -174,10 +164,10 @@ def compute_performance_metrics(data_generator):
     print(f"Average Accuracy (Segmentation): {avg_accuracy:.4f}")
 
     # Print the average classification performance metrics
-    print(f"Average Precision (Classification): {avg_classification_precision:.4f}")
-    print(f"Average Recall (Classification): {avg_classification_recall:.4f}")
-    print(f"Average Accuracy (Classification): {avg_classification_accuracy:.4f}")
-    print(f"Average F1-Score (Classification): {avg_classification_f1:.4f}")
+    print(f"Average Precision (Classification): {classification_precision:.4f}")
+    print(f"Average Recall (Classification): {classification_recall:.4f}")
+    print(f"Average Accuracy (Classification): {classification_accuracy:.4f}")
+    print(f"Average F1-Score (Classification): {classification_f1:.4f}")
 
     # Compute the confusion matrix for classification predictions
     cm = confusion_matrix(all_classification_ground_truths, all_classification_predictions)
